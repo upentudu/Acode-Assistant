@@ -54,7 +54,7 @@
     build:
       timeout-minutes: 60
       runs-on: ubuntu-latest
-      if: github.repository_owner == 'Acode-Foundation'
+      # if: github.repository_owner == 'Acode-Foundation'
 
       permissions:
 #        contents write is needed to create Nightly Releases.
@@ -67,14 +67,14 @@
          updated_version: ${{ steps.update-version.outputs.UPDATED_VERSION}} 
          RELEASE_NOTES: ${{ env.RELEASE_NOTES }}
       steps:
-        - name: Fast Fail if secrets are missing
-          if: ${{ env.KEYSTORE_CONTENT == '' || env.BUILD_JSON_CONTENT == '' }}
-          env:
-             KEYSTORE_CONTENT: ${{ secrets.KEYSTORE_CONTENT }} 
-             BUILD_JSON_CONTENT: ${{ secrets.BUILD_JSON_CONTENT }} 
-          run: |
-            echo "::error title=Missing Secrets::KEYSTORE_CONTENT or BUILD_JSON_CONTENT secrets are missing! Aborting workflow."
-            exit 1
+        # - name: Fast Fail if secrets are missing
+          # if: ${{ env.KEYSTORE_CONTENT == '' || env.BUILD_JSON_CONTENT == '' }}
+          # env:
+             # KEYSTORE_CONTENT: ${{ secrets.KEYSTORE_CONTENT }} 
+             # BUILD_JSON_CONTENT: ${{ secrets.BUILD_JSON_CONTENT }} 
+          # run: |
+            # echo "::error title=Missing Secrets::KEYSTORE_CONTENT or BUILD_JSON_CONTENT secrets are missing! Aborting workflow."
+            # exit 1
         
         - name: Logging & summaries
           run: |
@@ -117,11 +117,11 @@
             node-version: 'lts/*' # or '18.x' for latest stable
             cache: ${{ (!(inputs.is_PR && inputs.PR_NUMBER) && github.ref == 'refs/heads/main' && 'npm') || '' }}
 
-        - name: Add keystore and build.json from secrets
-          run: |
-            echo "${{ secrets.KEYSTORE_CONTENT }}" | base64 -d > ${{ env.STORE_FILE_PATH }}
-            echo "${{ secrets.BUILD_JSON_CONTENT }}" | base64 -d > ${{ env.BUILD_JSON_PATH }}
-            echo "Keystore and build.json added successfully."
+        # - name: Add keystore and build.json from secrets
+          # run: |
+            # echo "${{ secrets.KEYSTORE_CONTENT }}" | base64 -d > ${{ env.STORE_FILE_PATH }}
+            # echo "${{ secrets.BUILD_JSON_CONTENT }}" | base64 -d > ${{ env.BUILD_JSON_PATH }}
+            # echo "Keystore and build.json added successfully."
 
         - name: Export Commit Hash & prev tag
           run: |
@@ -199,10 +199,10 @@
             name: app-debug-fdroid-${{ env.GIT_COMMIT }}
             path: ${{ env.FDROID_APK_PATH }}
 
-        - name: remove keystore and build.json
-          run: |
-            rm $STORE_FILE_PATH $BUILD_JSON_PATH
-            echo "Keystore and build.json removed successfully."
+        # - name: remove keystore and build.json
+          # run: |
+            # rm $STORE_FILE_PATH $BUILD_JSON_PATH
+            # echo "Keystore and build.json removed successfully."
         
         - name: Check Nightly Tag and Force Update
           #if: github.event_name == 'push' && contains(github.event.ref, 'tags/nightly') == false
@@ -249,7 +249,7 @@
 #          Only run this step, if not called from another workflow. And a previous step is successful with releasedRequired=true
           id: release
           if: ${{ ! inputs.skip_tagging_and_releases && steps.check-nightly-tag-force-update.outcome == 'success' && env.releaseRequired == 'true' && !inputs.is_PR }}
-          uses: softprops/action-gh-release@v3
+          uses: softprops/action-gh-release@v2
           env:
             FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
           with:
@@ -279,17 +279,17 @@
                    [Click here to view that github actions build](https://github.com/${{ github.repository}}/actions/runs/${{ github.run_id }})
              
 
-    community-release-notifier:
-      needs: build
+    # community-release-notifier:
+      # needs: build
 #      Run only if push tags, or triggered by a schedule
-      if: ${{ github.repository_owner == 'Acode-Foundation' && (contains(fromJSON('["push", "schedule"]'), github.event_name) || ! inputs.skip_tagging_and_releases) && needs.build.outputs.release_output_url }}
-      uses: Acode-Foundation/acode/.github/workflows/community-release-notifier.yml@main
-      with:
-         tag_name: ${{ needs.build.outputs.updated_version }}
-         url: ${{ needs.build.outputs.release_output_url }}
-         body: ${{ needs.build.outputs.RELEASE_NOTES }}
-      secrets:
-        DISCORD_WEBHOOK_RELEASE_NOTES: ${{ secrets.DISCORD_WEBHOOK_RELEASE_NOTES }}
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
+      # if: ${{ github.repository_owner == 'Acode-Foundation' && (contains(fromJSON('["push", "schedule"]'), github.event_name) || ! inputs.skip_tagging_and_releases) && needs.build.outputs.release_output_url }}
+      # uses: Acode-Foundation/acode/.github/workflows/community-release-notifier.yml@main
+      # with:
+         # tag_name: ${{ needs.build.outputs.updated_version }}
+         # url: ${{ needs.build.outputs.release_output_url }}
+         # body: ${{ needs.build.outputs.RELEASE_NOTES }}
+      # secrets:
+        # DISCORD_WEBHOOK_RELEASE_NOTES: ${{ secrets.DISCORD_WEBHOOK_RELEASE_NOTES }}
+        # TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        # TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        # TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
