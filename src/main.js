@@ -149,6 +149,7 @@ async function Main() {
 	document.addEventListener("backbutton", backButtonHandler);
 	document.addEventListener("menubutton", menuButtonHandler);
 
+  if (!window.cordova && (location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
 		// --- MOCK FOR LOCALHOST BROWSER TESTING (MASTER BLOCK) ---
 		console.warn("Running in Browser Mode: Mocking Cordova APIs");
 		
@@ -374,6 +375,7 @@ async function Main() {
 		// ------------------------------------
 		setTimeout(onDeviceReady, 500);
 		// ---------------------------------------------------------
+  }
 }
 
 async function onDeviceReady() {
