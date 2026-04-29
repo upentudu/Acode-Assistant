@@ -136,11 +136,22 @@ module.exports = (env, options) => {
       },
       modules: ['node_modules', 'src'],
     },
-    plugins: [
+        plugins: [
       new rspack.CssExtractRspackPlugin({
         filename: '[name].css',
       }),
     ],
+    // ADD THIS DEV SERVER BLOCK
+    devServer: {
+      static: {
+        directory: path.join(__dirname, 'www'),
+      },
+      compress: true,
+      port: 3000,
+      host: '0.0.0.0', // Allows access from other devices on the same network
+      hot: true,
+      historyApiFallback: true,
+    },
   };
 
   return [main];

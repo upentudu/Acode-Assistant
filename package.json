@@ -6,6 +6,7 @@
   "scripts": {
     "lang": "node ./utils/lang.js",
     "build": "sh utils/scripts/build.sh",
+    "web": "webpack serve --mode development",
     "start": "sh utils/scripts/start.sh",
     "clean": "sh utils/scripts/clean.sh android android",
     "plugin": "sh utils/scripts/plugin.sh",
@@ -102,7 +103,10 @@
     "terminal": "^0.1.4",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
-    "vscode-languageserver-types": "^3.17.5"
+    "vscode-languageserver-types": "^3.17.5",
+    "webpack": "^5.106.2",
+    "webpack-cli": "^7.0.2",
+    "webpack-dev-server": "^5.2.3"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",

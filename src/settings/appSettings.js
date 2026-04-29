@@ -218,13 +218,16 @@ export default function otherSettings() {
 			key: "defaultFileEncoding",
 			text: strings["default file encoding"],
 			value: values.defaultFileEncoding,
+			// --- YAHAN CHANGE HUA HAI: ?.label || "UTF-8" LAGAYA HAI 👇 ---
 			valueText: (value) =>
-				value === "auto" ? strings.auto || "Auto" : getEncoding(value).label,
+				value === "auto" ? strings.auto || "Auto" : getEncoding(value)?.label || "UTF-8",
+			// ---------------------------------------------------------------
 			select: [
 				["auto", strings.auto || "Auto"],
 				...Object.keys(encodings).map((id) => {
 					const encoding = encodings[id];
-					return [id, encoding.label];
+					// --- EK AUR CHANGE: YAHAN BHI ?.label LAGAYA HAI 👇 ---
+					return [id, encoding?.label || "UTF-8"];
 				}),
 			],
 			info: strings["settings-info-app-default-file-encoding"],

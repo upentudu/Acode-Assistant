@@ -25,6 +25,7 @@ import Contextmenu from "components/contextmenu";
 import { hasConnectedServers } from "components/lspInfoDialog";
 import Sidebar from "components/sidebar";
 import { TerminalManager } from "components/terminal";
+import createAIAssistantUI from "components/aiAssistant/aiAssistant";
 import tile from "components/tile";
 import toast from "components/toast";
 import tutorial from "components/tutorial";
@@ -142,9 +143,237 @@ async function Main() {
 	document.addEventListener("pause", pauseHandler);
 	document.addEventListener("resume", resumeHandler);
 	document.addEventListener("keydown", keyboardHandler);
+	
+	// Original Cordova Listener
 	document.addEventListener("deviceready", onDeviceReady);
 	document.addEventListener("backbutton", backButtonHandler);
 	document.addEventListener("menubutton", menuButtonHandler);
+
+		// --- MOCK FOR LOCALHOST BROWSER TESTING (MASTER BLOCK) ---
+		console.warn("Running in Browser Mode: Mocking Cordova APIs");
+		
+		// 1. Mock Cordova & Exec
+		window.cordova = {
+			exec: function(success, fail, service, action, args) {
+				if (typeof success === 'function') success([]);
+			},
+			file: {
+				applicationDirectory: "file:///android_asset/",
+				externalCacheDirectory: "browser://cache/",
+				externalDataDirectory: "browser://data/",
+				cacheDirectory: "browser://cache/",
+				dataDirectory: "browser://data/"
+			},
+			plugin: { http: { sendRequest: (url, opts, success, fail) => fail("Mocked") } }
+		};
+
+		// 2. Mock Device Info (Acode isko Android version check karne ke liye use karta hai)
+		window.device = {
+			version: "11",
+			platform: "Android",
+			uuid: "browser-mock-uuid"
+		};
+
+		// 3. Mock Navigator App (Hardware Back/Menu buttons ke liye)
+		if (!navigator.app) {
+			navigator.app = {
+				overrideButton: () => {},
+				exitApp: () => console.log("App exit triggered")
+			};
+		}
+
+		// 4. Mock Consent & AdMob
+		window.consent = {
+			ConsentStatus: { Unknown: 0, Required: 1, NotRequired: 2, Obtained: 3 },
+			FormStatus: { Unknown: 0, Available: 1, Unavailable: 2 },
+			requestInfoUpdate: () => Promise.resolve(),
+			getConsentStatus: () => Promise.resolve(3), // 3 means Obtained
+			getFormStatus: () => Promise.resolve(2),
+			loadForm: () => Promise.resolve(),
+			showForm: () => Promise.resolve(),
+			reset: () => {}
+		};
+
+		window.admob = {
+			start: () => Promise.resolve(),
+			configure: () => Promise.resolve(),
+			BannerAd: class { 
+				show() { return Promise.resolve(); } 
+				hide() { return Promise.resolve(); } 
+				on() { return this; } 
+			},
+			InterstitialAd: class { 
+				load() { return Promise.resolve(); } 
+				show() { return Promise.resolve(); } 
+				on() { return this; } 
+			},
+			// Agar galti se Reward Ads bhi load kare toh wo bhi crash na ho
+			RewardedAd: class { 
+				load() { return Promise.resolve(); } 
+				show() { return Promise.resolve(); } 
+				on() { return this; } 
+			},
+			Events: {
+				adLoad: 'adLoad',
+				adLoadFail: 'adLoadFail',
+				adShow: 'adShow',
+				adShowFail: 'adShowFail',
+				adDismiss: 'adDismiss',
+			}
+		};
+
+		// 5. BuildInfo, IAP, System & SDCard (Ye tumhare paas pehle se hai)
+		window.BuildInfo = { packageName: "com.foxdebug.acode.free", version: "1.0.0", versionCode: 1 };
+		window.iap = { startConnection: (cb) => cb(), getPurchases: (cb) => cb([]) };
+		window.system = {
+			getAndroidVersion: (cb) => cb(30),
+			requestPermission: () => {},
+			clearCache: () => {},
+			setIntentHandler: () => {},
+			getCordovaIntent: () => {},
+			openInBrowser: (url) => window.open(url, '_blank'),
+			setUiTheme: (hexColor, type, success, error) => {
+				if (typeof success === 'function') success();
+			},
+			getUiTheme: (success) => {
+				if (typeof success === 'function') success("dark");
+			},
+			getGlobalSetting: (setting, success, error) => {
+				if (typeof success === 'function') success(1);
+			},
+			setInputType: (type, success, error) => {
+				if (typeof success === 'function') success();
+			},
+			// --- NAYA FUNCTION YAHAN ADD HUA HAI 👇 ---
+			setNativeContextMenuDisabled: (disabled, success, error) => {
+				console.log("Mocked setNativeContextMenuDisabled");
+				if (typeof success === 'function') success();
+			}
+		};
+
+		// 5. BuildInfo, IAP, System & SDCard wale block me sdcard ko update karo:
+		window.sdcard = {
+			watchFile: () => {},
+			// --- NAYE FUNCTIONS YAHAN ADD HUE HAIN 👇 ---
+			getStorageAccessPermission: (uuid, success, error) => {
+				console.log("Mocked SD Card Permission Requested");
+				// Fake permission dekar ek virtual path return kar do
+				if (typeof success === 'function') success("browser://virtual-storage");
+			},
+			formatUri: (uri, success, error) => {
+				if (typeof success === 'function') success(uri);
+			}
+		};
+
+		// 6. Mock File System for "browser://" (Full CRUD support for UI Testing)
+		const memoryFs = new Map();
+		// Shuruwat me ek default file daal dete hain testing ke liye
+		memoryFs.set("browser://virtual-storage/test.js", "// Welcome to Vibe Coding!\nconsole.log('AI is coming...');");
+
+		fsOperation.extend(
+			(url) => typeof url === 'string' && url.startsWith("browser://"),
+			(url) => ({
+				exists: () => Promise.resolve(true),
+				createDirectory: () => Promise.resolve(),
+				readFile: () => Promise.resolve(memoryFs.get(url) || ""),
+				writeFile: (content) => { 
+					memoryFs.set(url, content); 
+					return Promise.resolve(); 
+				},
+				createFile: async (name, content) => {
+					const newUrl = url + (url.endsWith('/') ? '' : '/') + name;
+					memoryFs.set(newUrl, content || "");
+					console.log("File Created:", newUrl);
+					return newUrl; // Acode UI is URL ka wait karta hai open karne ke liye
+				},
+				lsDir: () => {
+					const files = [];
+					const prefix = url + (url.endsWith('/') ? '' : '/');
+					memoryFs.forEach((val, key) => {
+						if (key.startsWith(prefix)) {
+							const relative = key.substring(prefix.length);
+							const name = relative.split('/')[0];
+							if (name && !files.find(f => f.name === name)) {
+								const isDir = !name.includes('.'); // Simple logic: dot nahi hai toh folder hai
+								files.push({ 
+									name, 
+									url: isDir ? prefix + name : key, 
+									isFile: !isDir, 
+									isDirectory: isDir 
+								});
+							}
+						}
+					});
+					return Promise.resolve(files);
+				},
+				stat: () => {
+					const isDir = url === "browser://virtual-storage" || !url.includes('.');
+					return Promise.resolve({ 
+						isDirectory: isDir, 
+						isFile: !isDir, 
+						name: url.split('/').pop(),
+						url: url,
+						uri: url,
+						size: (memoryFs.get(url) || "").length,
+						modifiedDate: new Date().getTime(),
+						canWrite: true,
+						canRead: true
+					});
+				},
+				delete: () => {
+					memoryFs.delete(url);
+					return Promise.resolve();
+				}
+			})
+		);
+
+		// 7. Mock Cordova File System Resolver (Upgraded for Files & Folders)
+		window.resolveLocalFileSystemURL = function(url, success, error) {
+			console.log("Mocked resolveLocalFileSystemURL:", url);
+			
+			// Simple check: agar URL me extension hai (jaise .json), toh usko file mano
+			const isFile = url.match(/\.[a-z0-9]+$/i) !== null;
+			const fileName = url.split('/').pop() || "mock";
+
+			if (success) {
+				success({
+					isDirectory: !isFile,
+					isFile: isFile,
+					name: fileName,
+					fullPath: url,
+					nativeURL: url,
+					toInternalURL: function() { return url; },
+					toURL: function() { return url; },
+					createReader: function() {
+						return {
+							readEntries: function(readSuccess) { 
+								if (readSuccess) readSuccess([]); 
+							}
+						};
+					},
+					getFile: function(path, opts, getSuccess, getError) { 
+						if (getError) getError({ code: 1, message: "NOT_FOUND_ERR" }); 
+					},
+					getDirectory: function(path, opts, getSuccess, getError) { 
+						if (getError) getError({ code: 1, message: "NOT_FOUND_ERR" }); 
+					},
+					// --- YE NAYA FUNCTION ADD HUA HAI FILE READ KARNE KE LIYE 👇 ---
+					file: function(fileSuccess) {
+						if (typeof fileSuccess === 'function') {
+							// Agar JSON file hai, toh empty object "{}" return karo warna empty string ""
+							const mockContent = fileName.endsWith('.json') ? "{}" : "";
+							const blob = new Blob([mockContent], { type: 'text/plain' });
+							blob.name = fileName;
+							fileSuccess(blob);
+						}
+					}
+				});
+			}
+		};
+
+		// ------------------------------------
+		setTimeout(onDeviceReady, 500);
+		// ---------------------------------------------------------
 }
 
 async function onDeviceReady() {
@@ -457,6 +686,46 @@ async function loadApp() {
 			style={{ fontSize: "1.2em" }}
 		/>
 	);
+
+	// --- AI ASSISTANT TRIGGER BUTTON 👇 ---
+	// const $aiToggler = (
+		// <span
+			// style={{ fontSize: "1.3em", margin: "0 10px", cursor: "pointer", display: "flex", alignItems: "center", paddingBottom: "2px" }}
+		// >✨</span>
+	// );
+	
+	// --- AI ASSISTANT TRIGGER BUTTON 👇 ---
+	const $aiToggler = document.createElement("span");
+	$aiToggler.className = "icon"; // Acode ki icon class zaroori hai
+	$aiToggler.innerText = "✨";
+	$aiToggler.style.fontSize = "1.3em";
+	$aiToggler.style.margin = "0 10px";
+	$aiToggler.style.cursor = "pointer";
+	$aiToggler.style.pointerEvents = "auto"; // Force clicks
+	$aiToggler.style.display = "inline-flex";
+	$aiToggler.style.alignItems = "center";
+
+	// Mobile touch aur header drag ko bypass karne ke liye
+	$aiToggler.addEventListener("mousedown", function(e) {
+		e.stopPropagation(); 
+	});
+	$aiToggler.addEventListener("touchstart", function(e) {
+		e.stopPropagation(); 
+	});
+
+	// Asli click event jise koi block nahi kar sakta
+	$aiToggler.addEventListener("click", function(e) {
+		e.preventDefault();
+		e.stopPropagation(); // Header ko click intercept karne se roko
+		
+		if (typeof window.openAiAssistant === "function") {
+			window.openAiAssistant();
+		} else {
+			alert("Error: AI function load nahi hua hai!");
+		}
+	});
+	// --------------------------------------
+
 	const $navToggler = (
 		<span className="icon menu" attr-action="toggle-sidebar" />
 	);
@@ -648,14 +917,17 @@ async function loadApp() {
 	function onEditorUpdate(mode, saveState = true) {
 		const { activeFile } = editorManager;
 
-		// if (!$editMenuToggler.isConnected) {
-		// 	$header.insertBefore($editMenuToggler, $header.lastChild);
-		// }
-		if (activeFile?.type === "page" || activeFile?.type === "terminal") {
+		// Agar current tab AI ya Terminal hai, toh Pencil aur AI icons hide kar do
+		if (activeFile?.type === "page" || activeFile?.type === "terminal" || activeFile?.type === "ai-assistant") {
 			$editMenuToggler.remove();
+			$aiToggler.remove();
 		} else {
 			if (!$editMenuToggler.isConnected) {
 				$header.insertBefore($editMenuToggler, $header.lastChild);
+			}
+			if (!$aiToggler.isConnected) {
+				// AI icon ko Pencil icon ke thik pehle (left me) lagao
+				$header.insertBefore($aiToggler, $editMenuToggler);
 			}
 		}
 
@@ -688,11 +960,43 @@ async function loadApp() {
 			} else {
 				$runBtn.remove();
 			}
+
 		} catch (error) {
 			$runBtn.removeAttribute("run-file");
 			$runBtn.remove();
 		}
 	}
+
+		// --- AI ASSISTANT TAB & UI LOGIC 👇 ---
+	window.openAiAssistant = function() {
+		try {
+			// Agar pehle se open hai toh usi par switch karo
+			const existingTab = editorManager.getFile("acode-assistant-tab", "id");
+			if (existingTab) {
+				existingTab.makeActive();
+				return;
+			}
+
+			// NAYE FILE SE UI IMPORT KAR LIYA
+			const aiContainer = createAIAssistantUI();
+
+			// 👇 NAYA NATIVE FIX: Bas hideQuickTools: true add karna hai
+			const aiFile = new EditorFile("Acode Assistant", {
+				id: "acode-assistant-tab",
+				uri: "browser://ai-assistant", 
+				type: "ai-assistant",
+				tabIcon: "icon auto_awesome",
+				content: aiContainer,
+				hideQuickTools: true // <--- YE LINE JAADOO KAREGI ✨
+			});
+			
+		} catch (error) {
+			alert("Opps, error aagaya: " + error.message);
+			console.error("AI Tab Error:", error);
+		}
+	};
+	// --------------------------------------
+
 }
 
 function onClickApp(e) {
@@ -756,7 +1060,11 @@ function createFileMenu({ top, bottom, toggler }) {
 				$menu.classList.remove("disabled");
 			}
 
-			const { label: encoding } = getEncoding(file.encoding);
+			// --- FIX YAHAN HAI: Agar getEncoding undefined de, toh default UTF-8 set karo 👇 ---
+			const encodingObj = getEncoding(file.encoding) || { label: "UTF-8" };
+			const encoding = encodingObj.label;
+			// ------------------------------------------------------------------------------------
+
 			const isEditorFile = file.type === "editor";
 			const cmEditor = window.editorManager?.editor;
 			const hasSelection = !!cmEditor && !cmEditor.state.selection.main.empty;
@@ -771,7 +1079,6 @@ function createFileMenu({ top, bottom, toggler }) {
 					strings["close tabs to right"] || "Close Right",
 				close_tabs_to_left_text: strings["close tabs to left"] || "Close Left",
 				close_other_tabs_text: strings["close other tabs"] || "Close Others",
-				// Use CodeMirror mode stored on EditorFile (set in setMode)
 				file_mode: isEditorFile ? file.currentMode || "" : "",
 				file_encoding: isEditorFile ? encoding : "",
 				file_read_only: !file.editable,

@@ -416,12 +416,14 @@ export default class EditorFile {
 				let container;
 				let shadow;
 
-				if (this.#type === "terminal") {
+				if (this.#type === "terminal" || this.#type === "ai-assistant") {
 					container = tag("div", {
 						className: "tab-page-container",
 					});
 					const content = tag("div", {
 						className: "tab-page-content",
+						// 👇 CRITICAL FIX: Yahan humne condition laga di hai
+						append: this.#type === "ai-assistant" ? this.customUiContainer : this.terminalComponent,
 					});
 					content.appendChild(options?.content);
 					container.appendChild(content);

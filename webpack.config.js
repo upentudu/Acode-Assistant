@@ -130,6 +130,18 @@ module.exports = (env, options) => {
         filename: '[name].css',
       }),
     ],
+    // --- YE DEV SERVER BLOCK ADD KARO ---
+    devServer: {
+      static: {
+        directory: path.join(__dirname, 'www'),
+      },
+      compress: true,
+      port: 3000,
+      host: '0.0.0.0', 
+      hot: true,
+      historyApiFallback: true,
+      allowedHosts: 'all',
+    },
   };
 
   return [main];
