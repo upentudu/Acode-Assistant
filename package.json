@@ -91,6 +91,7 @@
     "cordova-plugin-system": "file:src/plugins/system",
     "cordova-plugin-websocket": "file:src/plugins/websocket",
     "css-loader": "^7.1.2",
+    "dotenv-webpack": "^9.0.0",
     "mini-css-extract-plugin": "^2.9.4",
     "path-browserify": "^1.0.1",
     "postcss-loader": "^8.2.0",
