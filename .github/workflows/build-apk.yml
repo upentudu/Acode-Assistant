@@ -1,6 +1,5 @@
 name: Build Acode APK
 
-# Ye workflow tab chalega jab tum chahoge (manual) ya main branch pe push karोगे
 on:
   workflow_dispatch: 
   push:
@@ -13,49 +12,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Repository ka code uthao
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Android SDK ke liye Java setup karo
       - name: Setup Java JDK
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: '17' # Modern Android builds require Java 17
+          java-version: '17'
 
-      # 3. Webpack aur dependencies ke liye Node.js setup karo
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      # 4. Cordova globally install karo
       - name: Install Cordova
         run: npm install -g cordova
 
-      # 5. Project dependencies install karo
       - name: Install NPM Dependencies
         run: npm install
 
-      # 6. Webpack Build Run karo (UI aur code compile karne ke liye)
-      - name: Build Web Assets (Webpack)
+      # 🔥 THE FIX: Platform ko build se PEHLE add karna hai 🔥
+      - name: Add Android Platform
+        run: cordova platform add android
+
+      # Ab build script smoothly chalegi kyunki platforms folder exist karta hai
+      - name: Build Web Assets and APK
         run: npm run build
 
-      # 7. Cordova Android platform add karo (agar pehle se nahi hai)
-      - name: Add Android Platform
-        run: |
-          if [ ! -d "platforms/android" ]; then
-            cordova platform add android
-          fi
-
-      # 8. Final APK Build karo
-      - name: Build Debug APK
-        run: cordova build android --debug
-
-      # 9. GitHub par APK upload karo taaki tum phone me download kar sako
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Acode-Assistant-APK
-          path: '**/*.apk' # Ye kisi bhi folder me banne wale APK ko auto-detect kar lega
+          path: '**/*.apk'
