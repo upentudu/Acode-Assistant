@@ -3,7 +3,8 @@
 import { ACODE_SYSTEM_PROMPT } from './systemPrompt.js';
 import fsOperation from 'fileSystem';
 
-const GROQ_API_KEY = "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";
+// const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "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";
 
 let chatHistory = [
     { role: "system", content: ACODE_SYSTEM_PROMPT }
@@ -33,10 +34,45 @@ const tools = [
                 required: ["file_path"]
             }
         }
+    },
+    {
+        type: "function",
+        function: {
+            name: "write_file",
+            description: "Creates a new file or overwrites an existing one with new content. Provide the complete code/content.",
+            parameters: {
+                type: "object",
+                properties: { 
+                    file_path: { type: "string" },
+                    content: { type: "string" }
+                },
+                required: ["file_path", "content"]
+            }
+            
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "edit_file",
+            description: "Edits an existing file by replacing specific lines of code. Use this for precise modifications instead of rewriting the entire file.",
+            parameters: {
+                type: "object",
+                properties: { 
+                    file_path: { type: "string", description: "The exact URL or path to the file." },
+                    start_line: { type: "number", description: "The 1-based starting line number to replace." },
+                    end_line: { type: "number", description: "The 1-based ending line number to replace (inclusive)." },
+                    new_code: { type: "string", description: "The new code snippet to insert in place of the replaced lines." }
+                },
+                required: ["file_path", "start_line", "end_line", "new_code"]
+            }
+        }
     }
+
 ];
 
-async function callGroqAPI() {
+// 🔥 NAYA: onProgress callback add kiya hai real-time typing ke liye
+async function callGroqAPI(onProgress) {
     const url = "https://api.groq.com/openai/v1/chat/completions";
     
     const response = await fetch(url, {
@@ -49,7 +85,8 @@ async function callGroqAPI() {
             model: "llama-3.3-70b-versatile",
             messages: chatHistory,
             tools: tools,
-            tool_choice: "auto"
+            tool_choice: "auto",
+            stream: true // 🔥 STREAMING ENABLED
         })
     });
 
@@ -58,21 +95,71 @@ async function callGroqAPI() {
         throw new Error(errorData.error?.message || "Groq API Request Failed");
     }
 
-    const data = await response.json();
-    const responseMessage = data.choices[0].message;
+    // 🌊 STREAM PARSING LOGIC 🌊
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    
+    let fullAiMessage = "";
+    let toolCallsBuffer = [];
 
-    if (responseMessage.tool_calls) {
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
         
-        // FIX: Groq Object-to-String Bug
-        responseMessage.tool_calls.forEach(tool => {
-            if (tool.function && typeof tool.function.arguments === 'object') {
-                tool.function.arguments = JSON.stringify(tool.function.arguments);
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(line => line.trim().startsWith('data: '));
+
+        for (const line of lines) {
+            const dataStr = line.replace('data: ', '').trim();
+            if (dataStr === '[DONE]') continue;
+
+            try {
+                const data = JSON.parse(dataStr);
+                const delta = data.choices[0]?.delta;
+                
+                if (!delta) continue;
+
+                // 1. Agar normal text aa raha hai, toh UI ko bhejo
+                if (delta.content) {
+                    fullAiMessage += delta.content;
+                    if (onProgress) onProgress(fullAiMessage); // Update UI real-time!
+                }
+
+                // 2. Agar Tool Call aa raha hai, toh use Buffer me save karo
+                if (delta.tool_calls) {
+                    for (const tcDelta of delta.tool_calls) {
+                        const idx = tcDelta.index;
+                        if (!toolCallsBuffer[idx]) {
+                            toolCallsBuffer[idx] = {
+                                id: tcDelta.id,
+                                type: "function",
+                                function: { name: tcDelta.function?.name || "", arguments: "" }
+                            };
+                        }
+                        if (tcDelta.function?.arguments) {
+                            toolCallsBuffer[idx].function.arguments += tcDelta.function.arguments;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Stream parse error:", e);
             }
+        }
+    }
+
+    // 🛠️ STREAM KHATAM HONE KE BAAD TOOL EXECUTION 🛠️
+    toolCallsBuffer = toolCallsBuffer.filter(Boolean); // Clean empty slots
+
+    if (toolCallsBuffer.length > 0) {
+        // AI ki request history me save karo
+        chatHistory.push({
+            role: "assistant",
+            content: fullAiMessage || null,
+            tool_calls: toolCallsBuffer
         });
 
-        chatHistory.push(responseMessage);
-
-        for (const toolCall of responseMessage.tool_calls) {
+        // Har tool ko execute karo
+        for (const toolCall of toolCallsBuffer) {
             let toolResult = "";
             try {
                 const args = JSON.parse(toolCall.function.arguments);
@@ -94,10 +181,52 @@ async function callGroqAPI() {
                         toolResult = `Error: File not found at ${args.file_path}`;
                     }
                 }
+                else if (toolCall.function.name === "write_file") {
+                    const dirPath = args.file_path.substring(0, args.file_path.lastIndexOf('/'));
+                    const fileName = args.file_path.substring(args.file_path.lastIndexOf('/') + 1);
+                    
+                    const fileFs = fsOperation(args.file_path);
+                    const parentFs = fsOperation(dirPath);
+
+                    if (await fileFs.exists()) {
+                        await fileFs.writeFile(args.content);
+                        toolResult = `Success: Existing file overwritten at ${args.file_path}`;
+                    } else {
+                        if (await parentFs.exists()) {
+                            await parentFs.createFile(fileName, args.content);
+                            toolResult = `Success: New file created at ${args.file_path}`;
+                        } else {
+                            toolResult = `Error: Parent directory does not exist at ${dirPath}`;
+                        }
+                    }
+                }
+                // 🔥 NAYA LOGIC: Precise Code Editing 🔥
+                else if (toolCall.function.name === "edit_file") {
+                    const fs = fsOperation(args.file_path);
+                    
+                    if (await fs.exists()) {
+                        const fileContent = await fs.readFile('utf-8');
+                        const lines = fileContent.split('\n'); // File ko lines me todo
+                        
+                        // 1-based indexing ko JS ki 0-based array indexing me badlo
+                        const startIdx = Math.max(0, args.start_line - 1);
+                        const deleteCount = Math.max(1, args.end_line - args.start_line + 1);
+                        
+                        // Array splice se purani lines hatao aur naya code dalo
+                        lines.splice(startIdx, deleteCount, args.new_code);
+                        
+                        // Wapas string banakar file me save kar do
+                        await fs.writeFile(lines.join('\n'));
+                        toolResult = `Success: Lines ${args.start_line} to ${args.end_line} replaced successfully in ${args.file_path}`;
+                    } else {
+                        toolResult = `Error: File not found at ${args.file_path}. Cannot edit.`;
+                    }
+                }
             } catch (err) {
                 toolResult = `Error: ${err.message}`;
             }
 
+            // Tool ka result history me dalo
             chatHistory.push({
                 tool_call_id: toolCall.id,
                 role: "tool",
@@ -106,39 +235,38 @@ async function callGroqAPI() {
             });
         }
 
-        return await callGroqAPI();
+        // Loop: Tool ka result lekar naya message generate karo
+        return await callGroqAPI(onProgress);
     }
 
-    chatHistory.push({ role: "assistant", content: responseMessage.content });
-    return responseMessage.content;
+    // Agar koi tool call nahi hua (yaani normal reply khatam ho gaya)
+    chatHistory.push({ role: "assistant", content: fullAiMessage });
+    return fullAiMessage;
 }
 
-export async function sendToGroq(prompt) {
+// 🔥 NAYA: onProgress callback yahan accept kar rahe hain
+export async function sendToGroq(prompt, onProgress) {
     if (!GROQ_API_KEY) throw new Error("API Key missing!");
 
-    // 🧠 SMART CONTEXT INJECTION (Tumhara Idea!)
     let currentWorkspace = "No folder currently opened.";
     try {
-        // Acode ka internal module use karke opened folders nikalo
         const addedFolders = window.acode.require('addedfolder');
         if (addedFolders && addedFolders.length > 0) {
-            // Jo folder Acode ki sidebar me khula hai, uska exact URL le lo
-            currentWorkspace = addedFolders[0].url; 
+            currentWorkspace = addedFolders[0].url;
         }
     } catch (e) {
         console.warn("Could not fetch Acode workspace context.");
     }
 
-    // User ke prompt ke aage chupke se system context laga do
     const contextualPrompt = `[System Context: The user's Current Working Directory URL is: '${currentWorkspace}']\n\nUser Message: ${prompt}`;
 
-    // Ab AI ko exactly pata hoga ki use list_dir() me kya path dalni hai!
     chatHistory.push({ role: "user", content: contextualPrompt });
     
     try {
-        return await callGroqAPI();
+        // onProgress function pass kar diya
+        return await callGroqAPI(onProgress);
     } catch (error) {
-        chatHistory.pop(); // Error aane par prompt hata do
+        chatHistory.pop(); 
         throw error;
     }
 }

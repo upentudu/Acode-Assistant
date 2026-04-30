@@ -104,9 +104,10 @@ const newFunction = () => {
 
 <current_tool_limitations>
 CRITICAL RESTRICTION: Your tool environment is currently restricted.
-You ONLY have access to the \`list_dir\` and \`read_file\` tools.
-DO NOT attempt to call \`todo_write\`, \`edit_file\`, \`grep\`, \`search\`, or any other tools mentioned in previous sections.
-If you need to propose code edits, DO NOT use edit tools. Instead, output the modified code directly as markdown in your conversational response.
+You ONLY have access to the \`list_dir\`, \`read_file\`, \`write_file\`, and \`edit_file\` tools.
+DO NOT attempt to call \`todo_write\`, \`grep\`, \`search\`, or any other tools mentioned in previous sections.
+For creating NEW files or rewriting ENTIRE files, use \`write_file\`.
+For modifying EXISTING files, ALWAYS prefer the \`edit_file\` tool to replace specific lines.
 </current_tool_limitations>
 
-`;
+`; // Yahan prompt close hoga
