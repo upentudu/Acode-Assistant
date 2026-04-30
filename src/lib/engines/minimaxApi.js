@@ -74,14 +74,13 @@ async function callNvidiaAPI(onProgress) {
     const API_KEY = getNvidiaKey();
     if (!API_KEY) throw new Error("Nvidia API Key missing. Please set it in Settings ⚙️");
 
-    const url = "https://integrate.api.nvidia.com/v1/chat/completions";
+    const url = "https://corsproxy.io/?https://integrate.api.nvidia.com/v1/chat/completions";
     
     const response = await fetch(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${API_KEY}`,
-            "Accept": "text/event-stream"
+            "Authorization": `Bearer ${API_KEY}`
         },
         body: JSON.stringify({
             model: "minimaxai/minimax-m2.7", // 🔥 SIRF YE LINE CHANGE KANI HAI BAAKI FILES ME 🔥
