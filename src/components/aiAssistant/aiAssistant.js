@@ -1,10 +1,10 @@
 import { sendToGroq } from "../../lib/engines/groqApi";
-// Yahan hum baaki sab files import karenge
 import { sendToMistral } from "../../lib/engines/mistralApi";
 import { sendToGlm } from "../../lib/engines/glmApi";
 import { sendToMinimax } from "../../lib/engines/minimaxApi";
 import { sendToGemma } from "../../lib/engines/gemmaApi";
 import { sendToQwen } from "../../lib/engines/qwenApi";
+import { sendToGemini } from "../../lib/engines/geminiApi"; // 🔥 NAYA
 
 export default function createAIAssistantUI() {
 	const aiContainer = document.createElement("div");
@@ -50,13 +50,16 @@ export default function createAIAssistantUI() {
 			</div>
 			<div class="chat-loading" id="ai-loading-indicator">Assistant is thinking...</div>
 		</div>
-
+	
 		<div class="ai-settings-modal" id="ai-settings-modal">
 			<div style="font-size: 14px; font-weight: bold; margin-bottom: 8px;">API Settings</div>
 			<input type="password" class="ai-settings-input" id="groq-key" placeholder="Groq API Key" />
-			<input type="password" class="ai-settings-input" id="nvidia-key" placeholder="Nvidia API Key" />
+			<input type="password" class="ai-settings-input" id="mistral-key" placeholder="Mistral API Key (Official)" />
+			<input type="password" class="ai-settings-input" id="glm-key" placeholder="GLM API Key (Official)" />
+			<input type="password" class="ai-settings-input" id="gemini-key" placeholder="Google Gemini API Key" />
 			<button class="ai-settings-save" id="save-keys-btn">Save Keys</button>
 		</div>
+
 
 		<div class="ai-input-wrapper">
 			<textarea class="ai-textarea" id="ai-input" rows="1" placeholder="Describe what you want to build..."></textarea>
@@ -64,12 +67,10 @@ export default function createAIAssistantUI() {
 				<div class="ai-toolbar-left">
 					<button class="ai-icon-btn" id="ai-settings-btn" style="font-size: 18px;">⚙️</button>
 					<select class="ai-dropdown" id="ai-model-select">
+						<option value="gemini">Gemini Flash (Google)</option>
 						<option value="groq">Llama 3 (Groq)</option>
-						<option value="mistral">Mistral 128B (Nvidia)</option>
-						<option value="glm">GLM 5.1 (Nvidia)</option>
-						<option value="minimax">MiniMax (Nvidia)</option>
-						<option value="gemma">Gemma 4 31B (Nvidia)</option>
-						<option value="qwen">Qwen 3.5 122B (Nvidia)</option>
+						<option value="mistral">Mistral (Official)</option>
+						<option value="glm">GLM 4 (Official)</option>
 					</select>
 				</div>
 				<div class="ai-toolbar-right">
@@ -94,20 +95,30 @@ export default function createAIAssistantUI() {
 		const groqInput = aiContainer.querySelector('#groq-key');
 		const nvidiaInput = aiContainer.querySelector('#nvidia-key');
 
-		// Load saved keys
+		// Keys Load karna
+		const mistralInput = aiContainer.querySelector('#mistral-key');
+		const glmInput = aiContainer.querySelector('#glm-key');
+		const geminiInput = aiContainer.querySelector('#gemini-key'); // 🔥 NAYA
+		
 		groqInput.value = localStorage.getItem('ACODE_GROQ_API_KEY') || '';
-		nvidiaInput.value = localStorage.getItem('ACODE_NVIDIA_API_KEY') || '';
+		mistralInput.value = localStorage.getItem('ACODE_MISTRAL_API_KEY') || '';
+		glmInput.value = localStorage.getItem('ACODE_GLM_API_KEY') || '';
+		geminiInput.value = localStorage.getItem('ACODE_GEMINI_API_KEY') || ''; // 🔥 NAYA
 
-		settingsBtn.addEventListener('click', () => {
-			settingsModal.classList.toggle('active');
-		});
+		settingsBtn.addEventListener('click', () => { settingsModal.classList.toggle('active'); });
 
 		saveKeysBtn.addEventListener('click', () => {
 			localStorage.setItem('ACODE_GROQ_API_KEY', groqInput.value.trim());
-			localStorage.setItem('ACODE_NVIDIA_API_KEY', nvidiaInput.value.trim());
+			localStorage.setItem('ACODE_MISTRAL_API_KEY', mistralInput.value.trim());
+			localStorage.setItem('ACODE_GLM_API_KEY', glmInput.value.trim());
+			localStorage.setItem('ACODE_GEMINI_API_KEY', geminiInput.value.trim()); // 🔥 NAYA
+			
 			settingsModal.classList.remove('active');
 			appendMessage('bot', "✅ API Keys saved successfully!");
 		});
+
+        // 🔀 THE ROUTER ke andar case add karo:
+        
 
 		textarea.addEventListener('input', function() {
 			this.style.height = 'auto';
@@ -145,13 +156,11 @@ export default function createAIAssistantUI() {
 
 				// 🔀 THE ROUTER: Dropdown ke hisaab se sahi engine select karo
 				switch(selectedModel) {
-					case 'mistral': engineFunction = sendToMistral; break;
-					case 'glm': engineFunction = sendToGlm; break;
-					case 'minimax': engineFunction = sendToMinimax; break;
-					case 'gemma': engineFunction = sendToGemma; break;
-					case 'qwen': engineFunction = sendToQwen; break;
-					default: engineFunction = sendToGroq;
-				}
+            case 'mistral': engineFunction = sendToMistral; break;
+            case 'glm': engineFunction = sendToGlm; break;
+            case 'gemini': engineFunction = sendToGemini; break; // 🔥 NAYA
+            default: engineFunction = sendToGroq;
+        }
 
 				await engineFunction(prompt, (realTimeText) => {
 					if (loadingIndicator.style.display !== 'none') loadingIndicator.style.display = 'none';
