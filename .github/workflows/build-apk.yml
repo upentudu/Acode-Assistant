@@ -35,11 +35,11 @@ jobs:
       - name: Add Android Platform
         run: cordova platform add android
 
-      # 🔥 THE FIX: Forced Stable Gradle Distribution URL 🔥
+      # 🔥 THE FIX: Updated to exact version 8.11.1 🔥
       - name: Build Web Assets and APK
         run: npm run build
         env:
-          CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip"
+          CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL: "https://services.gradle.org/distributions/gradle-8.11.1-bin.zip"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
